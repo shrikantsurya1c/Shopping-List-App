@@ -1,5 +1,11 @@
 package com.example.shoppinglist
 
+
+import android.Manifest
+import android.content.Context
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -16,6 +22,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -31,19 +38,27 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
+import androidx.navigation.NavController
 
 data class ShoppingItem(
     val id: Int,
     var name: String,
     var quantity: Int,
-    var isEditing: Boolean = false
+    var isEditing: Boolean = false,
+    var address: String = "",
 )
 
 
 @Composable
-fun ShoppingList() {
+fun ShoppingList(
+    locationUtils: LocationUtils,
+    viewModel: LocationViewModel,
+    navController: NavController,
+    context: Context,
+    address: String
+) {
 
 
     /*
@@ -65,6 +80,44 @@ fun ShoppingList() {
     var itemName by remember { mutableStateOf("") }
     var itemQuantity by remember { mutableStateOf("") }
 
+    val requestPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions(),
+        onResult = { permissions ->
+            if (permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+                && permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
+            ) {
+                // I have access to location
+                locationUtils.requestLocationUpdates(viewModel = viewModel)
+
+            } else {
+                // Ask for permission
+                val rationaleRequired =
+                    ActivityCompat.shouldShowRequestPermissionRationale(
+                        context as MainActivity,
+                        Manifest.permission.ACCESS_FINE_LOCATION
+                    ) || ActivityCompat.shouldShowRequestPermissionRationale(
+                        context as MainActivity,
+                        Manifest.permission.ACCESS_FINE_LOCATION
+                    )
+
+                if (rationaleRequired) {
+                    Toast.makeText(
+                        context,
+                        "Loading permissions is required for this feature to work",
+                        Toast.LENGTH_LONG
+                    ).show()
+                } else {
+                    ActivityCompat.requestPermissions(
+                        context as MainActivity,
+                        arrayOf(
+                            Manifest.permission.ACCESS_COARSE_LOCATION,
+                            Manifest.permission.ACCESS_FINE_LOCATION
+                        ),
+                        1
+                    )
+                }
+            }
+        })
 
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -73,7 +126,7 @@ fun ShoppingList() {
         Button(
             onClick = { showDialog = true },
             modifier = Modifier.align(Alignment.CenterHorizontally)
-        ){
+        ) {
             /*
             // Example of Lambda
             // val doubleNumber = (Int) -> Int = { it * 2 }  Here inside Bracket "Int" is our input type
@@ -85,8 +138,10 @@ fun ShoppingList() {
         }
         LazyColumn(
             // using the below line, Lazy column is taking the entire space(including height and width)
-            modifier = Modifier.fillMaxSize().padding(16.dp)
-        ){
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
             // setting up the content for our Lazy column using items property
             items(sItems) {
 
@@ -117,41 +172,38 @@ fun ShoppingList() {
         }
 
 
-
-
-
         // Using the Alert Dialer to add items in the Shopping list
-        if (showDialog){
-            AlertDialog(onDismissRequest = { showDialog = false  },
+        if (showDialog) {
+            AlertDialog(onDismissRequest = { showDialog = false },
                 confirmButton = {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(8.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                    // this SpaceBetween will create the space between the two Buttons
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                        // this SpaceBetween will create the space between the two Buttons
 
-                                ){
-                                    Button(onClick = {
-                                        if(itemName.isNotBlank()){
-                                            val newItem = ShoppingItem(
-                                                id = sItems.size + 1,
-                                                name = itemName,
-                                                quantity = itemQuantity.toInt()
-                                            )
-                                            sItems = sItems + newItem
-                                            itemName = ""
-                                            itemQuantity = ""
-                                            showDialog = false
-                                        }
-                                    }) {
-                                        Text(text = "Add")
-                                    }
-                                    Button(onClick = {showDialog = false}) {
-                                        Text(text = "Cancel")
+                    ) {
+                        Button(onClick = {
+                            if (itemName.isNotBlank()) {
+                                val newItem = ShoppingItem(
+                                    id = sItems.size + 1,
+                                    name = itemName,
+                                    quantity = itemQuantity.toInt()
+                                )
+                                sItems = sItems + newItem
+                                itemName = ""
+                                itemQuantity = ""
+                                showDialog = false
+                            }
+                        }) {
+                            Text(text = "Add")
+                        }
+                        Button(onClick = { showDialog = false }) {
+                            Text(text = "Cancel")
 
-                                    }
-                                }
+                        }
+                    }
                 },
 
                 // Customizing our alert dialog
@@ -176,22 +228,38 @@ fun ShoppingList() {
                                 .fillMaxWidth()
                                 .padding(8.dp)
                         )
+                        Button(onClick = {
+                            if (locationUtils.hasLocationPermission(context)) {
+                                locationUtils.requestLocationUpdates(viewModel)
+                                navController.navigate("locationscreen"){
+                                    this.launchSingleTop = true
+                                }
+                            }else{
+                                requestPermissionLauncher.launch(
+                                    arrayOf(
+                                        Manifest.permission.ACCESS_COARSE_LOCATION,
+                                        Manifest.permission.ACCESS_FINE_LOCATION
+                                    )
+                                )
+                            }
+                        }){
+                            Text(text = "Select Location")
+                        }
                     }
                 }
-
             )
 
 
-
-            }
         }
+    }
 }
+
 // Here we will create the logic of our edit button
 @Composable
-fun ShoppingItemEditor(item: ShoppingItem, onEditComplete: (String,Int) -> Unit){
-    var editedName by remember{ mutableStateOf(item.name) }
-    var editedQuantity by remember{ mutableStateOf(item.quantity.toString()) }
-    var isEditing by remember{ mutableStateOf(item.isEditing) }
+fun ShoppingItemEditor(item: ShoppingItem, onEditComplete: (String, Int) -> Unit) {
+    var editedName by remember { mutableStateOf(item.name) }
+    var editedQuantity by remember { mutableStateOf(item.quantity.toString()) }
+    var isEditing by remember { mutableStateOf(item.isEditing) }
 
 
     Row(
@@ -200,10 +268,11 @@ fun ShoppingItemEditor(item: ShoppingItem, onEditComplete: (String,Int) -> Unit)
             .background(Color.White)
             .padding(8.dp),
         horizontalArrangement = Arrangement.SpaceEvenly
-    ){
+    ) {
         Column {
-            BasicTextField(value = editedName,
-                onValueChange = {editedName = it},
+            BasicTextField(
+                value = editedName,
+                onValueChange = { editedName = it },
                 singleLine = true,
                 modifier = Modifier
                     .wrapContentSize()
@@ -211,8 +280,9 @@ fun ShoppingItemEditor(item: ShoppingItem, onEditComplete: (String,Int) -> Unit)
                 // This wrapContentSize says that only take as much space as the items that are inside of you actually need
             )
 
-            BasicTextField(value = editedQuantity,
-                onValueChange = {editedQuantity = it},
+            BasicTextField(
+                value = editedQuantity,
+                onValueChange = { editedQuantity = it },
                 singleLine = true,
                 modifier = Modifier
                     .wrapContentSize()
@@ -222,119 +292,21 @@ fun ShoppingItemEditor(item: ShoppingItem, onEditComplete: (String,Int) -> Unit)
 
         Button(
             onClick = {
-                onEditComplete(editedName, editedQuantity.toIntOrNull()?: 1)
+                onEditComplete(editedName, editedQuantity.toIntOrNull() ?: 1)
                 isEditing = false
             }) {
-                Text("Save")
-            }
-
+            Text("Save")
         }
+
     }
-
-
-
-/*
------Examples of Maps-----
-
-// This is an example of a map
-val myMap = mapOf(
-    "key1" to "value1",
-    "key2" to "value2"
-)
-
-// This is an example of a mutable map
-val myMutableMap = mutableMapOf(
-    "key1" to "value1",
-    "key2" to "value2"
-)
-
-// This is an example of a list of maps
-val myListOfMaps = listOf(
-    mapOf(
-        "key1" to "value1",
-        "key2" to "value2"
-    ),
-    )
-)
-// Code
-
-val numbers = listof(1,2,3)
-val doubled = numbers.map { it * 2} // this map transforms the entire list by iterating through each item of the list, inside {}, I used what I want to do with this map
-println(doubled)
-
-// Output
-
-[2,4,6]
-
-// what this does is, it went to each item of the list and doubled it, basically it maps each of those items by multiplier of 2
-
- */
-
-
-/*
-USE OF COPY KEYWORD
-
-val blueRoseVase = Vase(color = "Blue", design = "Rose")
-val redFlowerVase = blueRoseVase.copy(color = "Red", design = "Flower")
-
-// Here I copied the original blueRoseVase and changed the color and design
-// copy keyword basically copies the original one and then we can use that copy anywhere without changing the original one
-
-
-// data class
-data class Vase(val color: String, val design: String)
-
- */
-
-
-/*
-// LET AND NULLABLE
-
-
-
-let allows you to use and transform an object without having to check if it is null or not
-
-In Kotlin, `let` and `nullable` are concepts related to handling nullable types.
-
-1. **Nullable Types:**
-   In Kotlin, a variable can be declared as nullable by appending a `?` to its type. For example:
-
-   var name: String? = "John" // This "?" says that this variable can be null or it can be a String
-
-  // Here, `name` can hold a String or a `null` value.
-
-2. **`let` Function:**
-   The `let` function is used to perform operations on a nullable object without the need for explicit null checks.
-   It is often used in combination with the safe call operator `?.` to invoke a block of code only if the object is not null.
-
-   Here's an example:
-
-   // code
-   var name: String? = "John"
-
-   name?.let {
-       println("Length of name: ${it.length}")
-   }
-
-   In this example, the `let` function is called only if `name` is not null,
-   allowing safe access to its properties or methods inside the lambda block.
-
-In simple terms, nullable types allow variables to hold either a regular value or a special value `null`.
-The `let` function is a convenient way to work with nullable objects without worrying about null pointer exceptions.
-
-
-
- */
-
-
-
+}
 
 
 @Composable
 fun ShoppingListItem(
     item: ShoppingItem,
     onEditClick: () -> Unit,
-    onDeleteClick: () -> Unit
+    onDeleteClick: () -> Unit,
 
 
     // Here on Edit and delete click is a lambda function,
@@ -350,9 +322,22 @@ fun ShoppingListItem(
             ),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(text = item.name, modifier = Modifier.padding(8.dp))
-        Text(text = "Qty: ${item.quantity}", modifier = Modifier.padding(8.dp))
-        Row(modifier = Modifier.padding(8.dp)){
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(8.dp)
+        ) {
+            Row {
+                Text(text = item.name, modifier = Modifier.padding(8.dp))
+                Text(text = "Qty: ${item.quantity}", modifier = Modifier.padding(8.dp))
+            }
+            Row(modifier = Modifier.padding(8.dp)){
+                Icon(imageVector = Icons.Default.LocationOn, contentDescription = null)
+                Text(text = item.address)
+            }
+        }
+
+        Row(modifier = Modifier.padding(8.dp)) {
             // This IconButton is simply a button, but its appearance is like an icon
             IconButton(onClick = onEditClick) {
                 Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit")
