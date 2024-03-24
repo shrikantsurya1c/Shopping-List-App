@@ -54,6 +54,7 @@ class LocationUtils(val context: Context) {
                 ) == PackageManager.PERMISSION_GRANTED
     }
 }
+
 //    fun reverseGeoLocation(location: LocationData): String {
 //        val geocoder = android.location.Geocoder(context, Locale.getDefault())
 //        val coordinates = LatLng(location.latitude, location.longitude)
